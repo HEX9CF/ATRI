@@ -11,6 +11,10 @@ from typing import Any
 from PIL import Image, UnidentifiedImageError
 
 
+# 提升 Pillow 解压炸弹检测阈值，允许处理最高 5 亿像素图片。
+Image.MAX_IMAGE_PIXELS = 500_000_000
+
+
 @dataclass
 class ProcessStats:
     total: int = 0

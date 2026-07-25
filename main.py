@@ -5,8 +5,18 @@ import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 
 from PIL import Image, UnidentifiedImageError
+
+
+@dataclass
+class ProcessStats:
+    total: int = 0
+    processed: int = 0
+    success: int = 0
+    failed: int = 0
+    unknown_date: int = 0
 
 
 def main() -> None:
@@ -30,16 +40,55 @@ def classify_files(input_dir: str, output_dir: str) -> None:
 
     output_path.mkdir(parents=True, exist_ok=True)
 
-    for file_path in input_path.rglob("*"):
-        if not file_path.is_file():
-            continue
+    files = [file_path for file_path in input_path.rglob("*") if file_path.is_file()]
+    stats = ProcessStats(total=len(files))
 
-        date_code = get_photo_date_code(file_path)
-        target_dir = output_path / date_code
-        target_dir.mkdir(parents=True, exist_ok=True)
+    start_at = perf_counter()
+    print(f"[START] input={input_path} output={output_path}")
+    print(f"[INFO] 待处理文件总数: {stats.total}")
 
-        target_path = unique_target_path(target_dir, file_path.name)
-        copy_file(file_path, target_path)
+    if not files:
+        print_summary(stats, perf_counter() - start_at)
+        return
+
+    for index, file_path in enumerate(files, start=1):
+        try:
+            date_code = get_photo_date_code(file_path)
+            if date_code == "000000":
+                stats.unknown_date += 1
+
+            target_dir = output_path / date_code
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            target_path = unique_target_path(target_dir, file_path.name)
+            copy_file(file_path, target_path)
+
+            stats.success += 1
+            print(
+                f"[{index}/{stats.total}] OK  {file_path} -> {target_path} "
+                f"({index / stats.total:.1%})"
+            )
+        except Exception as exc:
+            stats.failed += 1
+            print(
+                f"[{index}/{stats.total}] FAIL {file_path} "
+                f"error={type(exc).__name__}: {exc} ({index / stats.total:.1%})"
+            )
+        finally:
+            stats.processed += 1
+
+    elapsed = perf_counter() - start_at
+    print_summary(stats, elapsed)
+
+
+def print_summary(stats: ProcessStats, elapsed_seconds: float) -> None:
+    print("\n[SUMMARY] 处理完成")
+    print(f"[SUMMARY] 总数: {stats.total}")
+    print(f"[SUMMARY] 已处理: {stats.processed}")
+    print(f"[SUMMARY] 成功: {stats.success}")
+    print(f"[SUMMARY] 失败: {stats.failed}")
+    print(f"[SUMMARY] 无EXIF日期(归档到000000): {stats.unknown_date}")
+    print(f"[SUMMARY] 总耗时: {elapsed_seconds:.2f}s")
 
 
 def get_photo_date_code(file_path: Path) -> str:

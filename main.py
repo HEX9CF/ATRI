@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
+from typing import Any
 
 from PIL import Image, UnidentifiedImageError
 
@@ -105,13 +106,93 @@ def get_exif_datetime_original(file_path: Path) -> datetime | None:
             if not exif:
                 return None
 
-            # 36867 = DateTimeOriginal，部分图片也可能只存在 306 = DateTime。
-            raw_value = exif.get(36867) or exif.get(306)
-            if not raw_value:
-                return None
+            # 按精确性/可靠性从高到低兜底：Original -> Digitized -> Modify。
+            candidates = [
+                (36867, 37521, 36881),  # DateTimeOriginal + SubSecTimeOriginal + OffsetTimeOriginal
+                (36868, 37522, 36882),  # DateTimeDigitized + SubSecTimeDigitized + OffsetTimeDigitized
+                (306, 37520, 36880),    # DateTime + SubSecTime + OffsetTime
+            ]
 
-            return datetime.strptime(str(raw_value), "%Y:%m:%d %H:%M:%S")
+            for base_tag, subsec_tag, offset_tag in candidates:
+                parsed = parse_exif_datetime(
+                    exif.get(base_tag),
+                    exif.get(subsec_tag),
+                    exif.get(offset_tag),
+                )
+                if parsed is not None:
+                    return parsed
+
+            # 最后再用 GPS 时间兜底（通常是 UTC，且不一定等于快门时间）。
+            parsed_gps = parse_gps_datetime(exif)
+            if parsed_gps is not None:
+                return parsed_gps
+
+            return None
     except (FileNotFoundError, PermissionError, UnidentifiedImageError, ValueError, OSError):
+        return None
+
+
+def parse_exif_datetime(
+    raw_value: Any,
+    raw_subsec: Any = None,
+    raw_offset: Any = None,
+) -> datetime | None:
+    if not raw_value:
+        return None
+
+    dt_str = str(raw_value).strip()
+    if not dt_str:
+        return None
+
+    try:
+        shot_at = datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S")
+    except ValueError:
+        return None
+
+    if raw_subsec:
+        subsec_digits = "".join(ch for ch in str(raw_subsec) if ch.isdigit())
+        if subsec_digits:
+            microsecond = int((subsec_digits + "000000")[:6])
+            shot_at = shot_at.replace(microsecond=microsecond)
+
+    # 目前仅用于按日期归档，时区可不做换算；若偏移格式异常则忽略。
+    if raw_offset:
+        offset_str = str(raw_offset).strip()
+        if offset_str and len(offset_str) in (6, 3) and offset_str[0] in "+-":
+            if len(offset_str) == 3:
+                offset_str = f"{offset_str}:00"
+            try:
+                return datetime.fromisoformat(shot_at.strftime("%Y-%m-%dT%H:%M:%S.%f") + offset_str)
+            except ValueError:
+                pass
+
+    return shot_at
+
+
+def parse_gps_datetime(exif: Any) -> datetime | None:
+    gps_info = None
+
+    # Pillow 新老版本在 GPS IFD 读取方式上有差异。
+    try:
+        gps_info = exif.get_ifd(34853)
+    except Exception:
+        gps_info = exif.get(34853)
+
+    if not gps_info:
+        return None
+
+    raw_date = gps_info.get(29)  # GPSDateStamp
+    raw_time = gps_info.get(7)   # GPSTimeStamp
+    if not raw_date or not raw_time:
+        return None
+
+    try:
+        date_str = str(raw_date).strip().replace(":", "-")
+        hours = int(float(raw_time[0]))
+        minutes = int(float(raw_time[1]))
+        seconds = int(float(raw_time[2]))
+        return datetime.strptime(f"{date_str} {hours:02d}:{minutes:02d}:{seconds:02d}", "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError, IndexError):
         return None
 
 

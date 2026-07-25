@@ -86,12 +86,18 @@ def classify_files(input_dir: str, output_dir: str) -> None:
 
     for index, file_path in enumerate(files, start=1):
         try:
-            date_code, warning_count = get_photo_date_code(file_path)
+            date_code, warning_count, route_kind = get_photo_date_code(file_path)
             stats.warnings += warning_count
-            if date_code == "000000":
+            if route_kind == "unknown":
                 stats.unknown_date += 1
 
-            target_dir = output_path / date_code
+            if route_kind == "downgrade":
+                target_dir = output_path / "downgrade" / date_code
+            elif route_kind == "unknown":
+                target_dir = output_path / "unknown"
+            else:
+                target_dir = output_path / date_code
+
             target_dir.mkdir(parents=True, exist_ok=True)
 
             target_path = unique_target_path(target_dir, file_path.name)
@@ -123,15 +129,43 @@ def print_summary(stats: ProcessStats, elapsed_seconds: float) -> None:
     logger.info(f"[SUMMARY] 成功: {stats.success}")
     logger.info(f"[SUMMARY] 失败: {stats.failed}")
     logger.info(f"[SUMMARY] 警告: {stats.warnings}")
-    logger.info(f"[SUMMARY] 无EXIF日期(归档到000000): {stats.unknown_date}")
+    logger.info(f"[SUMMARY] 无法处理(归档到unknown): {stats.unknown_date}")
     logger.info(f"[SUMMARY] 总耗时: {elapsed_seconds:.2f}s")
 
 
-def get_photo_date_code(file_path: Path) -> tuple[str, int]:
+def get_photo_date_code(file_path: Path) -> tuple[str, int, str]:
     shot_at, warning_count = get_exif_datetime_original(file_path)
     if shot_at is None:
-        return "000000", warning_count
-    return shot_at.strftime("%y%m%d"), warning_count
+        fallback_at, fallback_warning_count = get_file_fallback_datetime(file_path)
+        warning_count += fallback_warning_count
+        if fallback_at is None:
+            return "unknown", warning_count, "unknown"
+        return fallback_at.strftime("%y%m%d"), warning_count, "downgrade"
+    return shot_at.strftime("%y%m%d"), warning_count, "normal"
+
+
+def get_file_fallback_datetime(file_path: Path) -> tuple[datetime | None, int]:
+    try:
+        stat_result = file_path.stat()
+    except (FileNotFoundError, PermissionError, OSError):
+        return None, 0
+
+    timestamps: list[float] = []
+    try:
+        timestamps.append(stat_result.st_ctime)
+    except AttributeError:
+        pass
+
+    try:
+        timestamps.append(stat_result.st_mtime)
+    except AttributeError:
+        pass
+
+    valid_times = [timestamp for timestamp in timestamps if timestamp > 0]
+    if not valid_times:
+        return None, 0
+
+    return datetime.fromtimestamp(min(valid_times)), 0
 
 
 def get_exif_datetime_original(file_path: Path) -> tuple[datetime | None, int]:

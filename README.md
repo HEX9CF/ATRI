@@ -1,3 +1,3 @@
-# ATRI - Automatic Toolkit for Repetitive Interactions
+# ATRI - Automated Toolkit for Repetitive Interactions
 
-A collection of Python automation scripts for daily repetitive tasks.
+A collection of automation scripts for daily repetitive tasks.

@@ -41,7 +41,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def setup_logging() -> None:
-    log_dir = Path("log")
+    project_root = Path(__file__).resolve().parents[1]
+    log_dir = project_root / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     log_file = log_dir / f"{datetime.now():%Y%m%d_%H%M%S}.log"

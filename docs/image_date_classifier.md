@@ -34,5 +34,5 @@ python scripts/image_date_classifier.py photos sorted_photos
 
 ## 日志
 
-- 运行时会在 `log/` 目录下生成日志文件
+- 运行时会在项目根目录的 `logs/` 目录下生成日志文件
 - 终端与日志文件会输出处理进度、失败项和汇总结果

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from math import pow
 from dataclasses import dataclass
 from typing import Final
 
@@ -22,9 +23,24 @@ class CalculationResult:
     total_interest: float
 
 
+@dataclass(frozen=True)
+class ReverseCalculationResult:
+    principal: float
+    interest: float
+    months: float
+    annual_rate: float
+    total_return_rate: float
+    final_value: float
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="理财投资收益计算器：按复利估算终值、总投入和收益"
+        description="理财投资收益计算器：支持正算和反算年化"
+    )
+    parser.add_argument(
+        "--reverse",
+        action="store_true",
+        help="启用反算模式：根据本金、收益和持有月数反推年化",
     )
     parser.add_argument(
         "--principal",
@@ -35,14 +51,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--annual-rate",
         type=float,
-        required=True,
-        help="年化收益率百分比，例如 5 表示 5%%",
+        help="年化收益率百分比，例如 5 表示 5%%（正算模式必填）",
     )
     parser.add_argument(
         "--years",
         type=float,
-        required=True,
-        help="投资年限，例如 3 或 3.5",
+        help="投资年限，例如 3 或 3.5（正算模式必填）",
+    )
+    parser.add_argument(
+        "--interest",
+        type=float,
+        help="总收益金额（反算模式必填）",
+    )
+    parser.add_argument(
+        "--months",
+        type=float,
+        help="持有月数（反算模式必填）",
     )
     parser.add_argument(
         "--compounds-per-year",
@@ -72,12 +96,30 @@ def parse_args() -> argparse.Namespace:
 def validate_args(args: argparse.Namespace) -> None:
     if args.principal < 0:
         raise ValueError("principal must be >= 0")
-    if args.years <= 0:
-        raise ValueError("years must be > 0")
     if args.compounds_per_year <= 0:
         raise ValueError("compounds_per_year must be > 0")
     if args.periodic_contribution < 0:
         raise ValueError("periodic_contribution must be >= 0")
+
+    if args.reverse:
+        if args.interest is None:
+            raise ValueError("interest is required in reverse mode")
+        if args.months is None:
+            raise ValueError("months is required in reverse mode")
+        if args.principal <= 0:
+            raise ValueError("principal must be > 0 in reverse mode")
+        if args.interest < 0:
+            raise ValueError("interest must be >= 0 in reverse mode")
+        if args.months <= 0:
+            raise ValueError("months must be > 0 in reverse mode")
+        return
+
+    if args.annual_rate is None:
+        raise ValueError("annual_rate is required in forward mode")
+    if args.years is None:
+        raise ValueError("years is required in forward mode")
+    if args.years <= 0:
+        raise ValueError("years must be > 0")
 
 
 def calculate_result(args: argparse.Namespace) -> CalculationResult:
@@ -110,6 +152,21 @@ def calculate_result(args: argparse.Namespace) -> CalculationResult:
     )
 
 
+def calculate_reverse_result(args: argparse.Namespace) -> ReverseCalculationResult:
+    final_value = args.principal + args.interest
+    total_return_rate = final_value / args.principal - 1.0
+    annual_rate = (pow(final_value / args.principal, 12.0 / args.months) - 1.0) * 100.0
+
+    return ReverseCalculationResult(
+        principal=args.principal,
+        interest=args.interest,
+        months=args.months,
+        annual_rate=annual_rate,
+        total_return_rate=total_return_rate,
+        final_value=final_value,
+    )
+
+
 def format_money(value: float, currency_symbol: str) -> str:
     return f"{currency_symbol}{value:,.2f}"
 
@@ -128,9 +185,24 @@ def print_result(result: CalculationResult, currency_symbol: str) -> None:
     print(f"总收益: {format_money(result.total_interest, currency_symbol)}")
 
 
+def print_reverse_result(result: ReverseCalculationResult, currency_symbol: str) -> None:
+    print("理财投资收益反算结果")
+    print(f"初始本金: {format_money(result.principal, currency_symbol)}")
+    print(f"总收益: {format_money(result.interest, currency_symbol)}")
+    print(f"持有月数: {result.months:.2f} 月")
+    print(f"总回报率: {result.total_return_rate * 100:.2f}%")
+    print(f"年化收益率: {result.annual_rate:.2f}%")
+    print(f"期末总金额: {format_money(result.final_value, currency_symbol)}")
+
+
 def main() -> None:
     args = parse_args()
     validate_args(args)
+    if args.reverse:
+        result = calculate_reverse_result(args)
+        print_reverse_result(result, args.currency_symbol)
+        return
+
     result = calculate_result(args)
     print_result(result, args.currency_symbol)
 

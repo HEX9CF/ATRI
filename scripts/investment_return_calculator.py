@@ -7,7 +7,7 @@ from typing import Final
 
 
 DEFAULT_COMPOUNDS_PER_YEAR: Final[int] = 12
-DEFAULT_CURRENCY_SYMBOL: Final[str] = "元"
+DEFAULT_CURRENCY_SYMBOL: Final[str] = "￥"
 
 
 @dataclass(frozen=True)

@@ -34,9 +34,20 @@ def main() -> None:
 
 
 def parse_args() -> argparse.Namespace:
+    project_root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description="按图片 EXIF 拍摄日期复制文件到日期目录")
-    parser.add_argument("input_dir", nargs="?", default="input", help="输入目录，默认 input")
-    parser.add_argument("output_dir", nargs="?", default="output", help="输出目录，默认 output")
+    parser.add_argument(
+        "input_dir",
+        nargs="?",
+        default=str(project_root / "input"),
+        help="输入目录，默认项目根目录下的 input",
+    )
+    parser.add_argument(
+        "output_dir",
+        nargs="?",
+        default=str(project_root / "output"),
+        help="输出目录，默认项目根目录下的 output",
+    )
     return parser.parse_args()
 
 

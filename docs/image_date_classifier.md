@@ -17,8 +17,8 @@ python scripts/image_date_classifier.py [input_dir] [output_dir]
 
 参数说明：
 
-- `input_dir`：输入目录，默认 `input`
-- `output_dir`：输出目录，默认 `output`
+- `input_dir`：输入目录，默认项目根目录下的 `input/`
+- `output_dir`：输出目录，默认项目根目录下的 `output/`
 
 ## 示例
 

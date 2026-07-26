@@ -2,6 +2,12 @@
 
 A collection of automation scripts for daily repetitive tasks.
 
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Scripts
 
 - `image_date_classifier.py`: 按图片 EXIF 日期归档文件
